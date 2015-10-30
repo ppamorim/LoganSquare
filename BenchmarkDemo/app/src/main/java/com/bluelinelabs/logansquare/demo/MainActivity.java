@@ -9,6 +9,11 @@ import android.view.View.OnClickListener;
 
 import com.bluelinelabs.logansquare.LoganSquare;
 import com.bluelinelabs.logansquare.demo.model.Response;
+import com.bluelinelabs.logansquare.demo.parseinputstreamtask.GsonInputStreamParser;
+import com.bluelinelabs.logansquare.demo.parseinputstreamtask.JacksonDatabindInputStreamParser;
+import com.bluelinelabs.logansquare.demo.parseinputstreamtask.LoganSquareInputStreamParser;
+import com.bluelinelabs.logansquare.demo.parseinputstreamtask.ParseResultInputStream;
+import com.bluelinelabs.logansquare.demo.parseinputstreamtask.ParserInputStream;
 import com.bluelinelabs.logansquare.demo.parsetasks.GsonParser;
 import com.bluelinelabs.logansquare.demo.parsetasks.JacksonDatabindParser;
 import com.bluelinelabs.logansquare.demo.parsetasks.LoganSquareParser;
@@ -16,6 +21,7 @@ import com.bluelinelabs.logansquare.demo.parsetasks.MoshiParser;
 import com.bluelinelabs.logansquare.demo.parsetasks.ParseResult;
 import com.bluelinelabs.logansquare.demo.parsetasks.Parser;
 import com.bluelinelabs.logansquare.demo.parsetasks.Parser.ParseListener;
+import com.bluelinelabs.logansquare.demo.parseinputstreamtask.ParserInputStream.ParseInputStreamListener;
 import com.bluelinelabs.logansquare.demo.serializetasks.GsonSerializer;
 import com.bluelinelabs.logansquare.demo.serializetasks.JacksonDatabindSerializer;
 import com.bluelinelabs.logansquare.demo.serializetasks.LoganSquareSerializer;
@@ -29,6 +35,7 @@ import com.google.gson.Gson;
 
 import com.squareup.moshi.Moshi;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
@@ -43,12 +50,19 @@ public class MainActivity extends ActionBarActivity {
 
     private BarChart mBarChart;
     private List<String> mJsonStringsToParse;
+    private List<InputStream> mInputStreamsToParse;
     private List<Response> mResponsesToSerialize;
 
     private final ParseListener mParseListener = new ParseListener() {
         @Override
         public void onComplete(Parser parser, ParseResult parseResult) {
             addBarData(parser, parseResult);
+        }
+    };
+    private final ParseInputStreamListener mParseInputStreamListener = new ParseInputStreamListener() {
+        @Override public void onComplete(ParserInputStream parserInputStream,
+            ParseResultInputStream parseResultInputStream) {
+            addBarData(parserInputStream, parseResultInputStream);
         }
     };
     private final SerializeListener mSerializeListener = new SerializeListener() {
@@ -64,6 +78,7 @@ public class MainActivity extends ActionBarActivity {
         setContentView(R.layout.activity_main);
 
         mJsonStringsToParse = readJsonFromFile();
+        mInputStreamsToParse = readInputStreamFromJson();
         mResponsesToSerialize = getResponsesToParse();
 
         mBarChart = (BarChart)findViewById(R.id.bar_chart);
@@ -82,11 +97,26 @@ public class MainActivity extends ActionBarActivity {
                 performSerializeTests();
             }
         });
+
+        findViewById(R.id.btn_parse_is_tests).setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                performParseInputStreamTests();
+            }
+        });
+
+        findViewById(R.id.btn_serialize_is_tests).setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                performSerializeTests();
+            }
+        });
     }
 
     private void performParseTests() {
         mBarChart.clear();
-        mBarChart.setSections(new String[] {"Parse 60 items", "Parse 20 items", "Parse 7 items", "Parse 2 items"});
+        mBarChart.setSections(
+                new String[]{"Parse 60 items", "Parse 20 items", "Parse 7 items", "Parse 2 items"});
 
         Gson gson = new Gson();
         ObjectMapper objectMapper = new ObjectMapper();
@@ -103,6 +133,29 @@ public class MainActivity extends ActionBarActivity {
 
         for (Parser parser : parsers) {
             parser.executeOnExecutor(AsyncTask.SERIAL_EXECUTOR);
+        }
+    }
+
+    private void performParseInputStreamTests() {
+        mBarChart.clear();
+        mBarChart.setSections(
+            new String[] { "Parse 60 items", "Parse 20 items", "Parse 7 items", "Parse 2 items" });
+
+        Gson gson = new Gson();
+        ObjectMapper objectMapper = new ObjectMapper();
+        Moshi moshi = new Moshi.Builder().build();
+        List<ParserInputStream> parserInputStreams = new ArrayList<>();
+        for (InputStream inputStream : mInputStreamsToParse) {
+            for (int iteration = 0; iteration < ITERATIONS; iteration++) {
+                parserInputStreams.add(new GsonInputStreamParser(mParseInputStreamListener, inputStream, gson));
+                parserInputStreams.add(new JacksonDatabindInputStreamParser(mParseInputStreamListener, inputStream, objectMapper));
+                parserInputStreams.add(new LoganSquareInputStreamParser(mParseInputStreamListener, inputStream));
+                parserInputStreams.add(new LoganSquareInputStreamParser(mParseInputStreamListener, inputStream));
+            }
+        }
+
+        for (ParserInputStream parserInputStream : parserInputStreams) {
+            parserInputStream.executeOnExecutor(AsyncTask.SERIAL_EXECUTOR);
         }
     }
 
@@ -156,6 +209,35 @@ public class MainActivity extends ActionBarActivity {
             mBarChart.addTiming(section, 2, parseResult.runDuration / 1000f);
         } else if (parser instanceof MoshiParser) {
             mBarChart.addTiming(section, 3, parseResult.runDuration / 1000f);
+        }
+    }
+
+    private void addBarData(ParserInputStream parserInputStream, ParseResultInputStream parseResultInputStream) {
+        int section;
+        switch (parseResultInputStream.objectsParsed) {
+            case 60:
+                section = 0;
+                break;
+            case 20:
+                section = 1;
+                break;
+            case 7:
+                section = 2;
+                break;
+            case 2:
+                section = 3;
+                break;
+            default:
+                section = -1;
+                break;
+        }
+
+        if (parserInputStream instanceof GsonInputStreamParser) {
+            mBarChart.addTiming(section, 0, parseResultInputStream.runDuration / 1000f);
+        } else if (parserInputStream instanceof JacksonDatabindInputStreamParser) {
+            mBarChart.addTiming(section, 1, parseResultInputStream.runDuration / 1000f);
+        } else if (parserInputStream instanceof LoganSquareInputStreamParser) {
+            mBarChart.addTiming(section, 2, parseResultInputStream.runDuration / 1000f);
         }
     }
 
@@ -217,6 +299,14 @@ public class MainActivity extends ActionBarActivity {
         strings.add(readFile("tinysample.json"));
 
         return strings;
+    }
+
+    private List<InputStream> readInputStreamFromJson() {
+        List<InputStream> inputStreams = new ArrayList<>();
+        for(String json : readJsonFromFile()) {
+            inputStreams.add(new ByteArrayInputStream(json.getBytes()));
+        }
+        return inputStreams;
     }
 
     private String readFile(String filename) {

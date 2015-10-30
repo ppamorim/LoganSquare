@@ -41,6 +41,31 @@
             />
     </LinearLayout>
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <Button
+            android:id="@+id/btn_parse_is_tests"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginLeft="@dimen/activity_horizontal_margin"
+            android:layout_marginRight="@dimen/activity_horizontal_margin"
+            android:text="@string/parse_benchmark"
+            />
+
+        <Button
+            android:id="@+id/btn_serialize_is_tests"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginLeft="@dimen/activity_horizontal_margin"
+            android:layout_marginRight="@dimen/activity_horizontal_margin"
+            android:text="@string/serialize_benchmark"
+            />
+    </LinearLayout>
+
     <com.bluelinelabs.logansquare.demo.widget.BarChart
         android:id="@+id/bar_chart"
         android:layout_width="match_parent"
